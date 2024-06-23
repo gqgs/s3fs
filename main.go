@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -139,7 +140,7 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 			ch := p.GetChild(component)
 			if ch == nil {
 				// Create a directory
-				ch = p.NewPersistentInode(ctx, &fs.Inode{},
+				ch = p.NewPersistentInode(ctx, &s3Directory{},
 					fs.StableAttr{Mode: syscall.S_IFDIR})
 				// Add it
 				p.AddChild(component, ch, true)
@@ -164,6 +165,22 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 		// And add it
 		p.AddChild(base, child, true)
 	}
+}
+
+var _ = (fs.NodeGetattrer)((*s3Directory)(nil))
+
+type s3Directory struct {
+	fs.Inode
+}
+
+func (f *s3Directory) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+	slog.Debug("directory getattr call")
+	out.Mode = 07777
+	out.Nlink = 1
+	out.Mtime = uint64(time.Now().Unix())
+	out.Atime = uint64(time.Now().Unix())
+	out.Ctime = uint64(time.Now().Unix())
+	return 0
 }
 
 var _ = (fs.NodeOpener)((*s3File)(nil))
@@ -223,7 +240,7 @@ func (f *s3File) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOu
 	out.Atime = uint64(f.LastModified.Unix())
 	out.Ctime = uint64(f.LastModified.Unix())
 	out.Size = uint64(aws.Int64Value(f.Size))
-	const bs = 512
+	const bs = 4096
 	out.Blksize = bs
 	out.Blocks = (out.Size + bs - 1) / bs
 	return 0
