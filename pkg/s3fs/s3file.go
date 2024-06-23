@@ -33,7 +33,7 @@ func (f *s3File) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32,
 		return nil, fuse.FOPEN_KEEP_CACHE, fs.OK
 	}
 	slog.Debug("file open call", "key", *f.Object.Key)
-	object, err := f.s3Client.GetObject(&s3.GetObjectInput{
+	object, err := f.s3Client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: &f.bucket,
 		Key:    f.Key,
 	})

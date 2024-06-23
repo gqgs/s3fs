@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"database/sql"
 	"encoding/hex"
+	"log"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -37,9 +38,9 @@ func NewFS(db *sql.DB, s3Client *s3.S3, bucket string) (*s3FS, error) {
 func (root *s3FS) OnAdd(ctx context.Context) {
 	slog.Debug("onAdd called")
 
-	objects, err := root.listObjects()
+	objects, err := root.listObjects(ctx)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	for _, object := range objects {
@@ -58,15 +59,15 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 				digest := sha1.Sum([]byte(dir))
 				hexdigest := hex.EncodeToString(digest[:])
 
-				if _, err := root.db.Exec("INSERT OR IGNORE INTO files (id, key) VALUES (?, ?)", hexdigest, dir); err != nil {
+				if _, err := root.db.ExecContext(ctx, "INSERT OR IGNORE INTO files (id, key) VALUES (?, ?)", hexdigest, dir); err != nil {
 					slog.Error("failed inserting data into database", "err", err.Error())
-					panic(err)
+					log.Fatal(err)
 				}
 				var timestamp time.Time
-				row := root.db.QueryRow("SELECT updated_at FROM files WHERE id = ?", hexdigest)
+				row := root.db.QueryRowContext(ctx, "SELECT updated_at FROM files WHERE id = ?", hexdigest)
 				if err := row.Scan(&timestamp); err != nil {
 					slog.Error("failed query database", "err", err.Error())
-					panic(err)
+					log.Fatal(err)
 				}
 
 				slog.Debug("creating directory inode", "dir", dir, "hexdigest", hexdigest, "updated_at", timestamp)
@@ -99,11 +100,11 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 	}
 }
 
-func (root *s3FS) listObjects() ([]*s3.Object, error) {
+func (root *s3FS) listObjects(ctx context.Context) ([]*s3.Object, error) {
 	var objects []*s3.Object
 	for {
 		var continuationToken *string
-		listObjectsResult, err := root.s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+		listObjectsResult, err := root.s3Client.ListObjectsV2WithContext(ctx, &s3.ListObjectsV2Input{
 			Bucket:            &root.bucket,
 			ContinuationToken: continuationToken,
 		})
