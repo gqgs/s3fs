@@ -28,7 +28,6 @@ type s3File struct {
 	bucket   string
 }
 
-// Open lazily unpacks zip data
 func (f *s3File) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
 	if f.reader != nil {
 		return nil, fuse.FOPEN_KEEP_CACHE, fs.OK

@@ -82,8 +82,6 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 			p = ch
 		}
 
-		// Make a file out of the content bytes. This type
-		// provides the open/read/flush methods.
 		file := &s3File{
 			Mutex:    new(sync.Mutex),
 			Object:   object,
