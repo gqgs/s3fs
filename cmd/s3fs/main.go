@@ -12,6 +12,7 @@ type options struct {
 	bucket     string `arg:"S3 bucket to mount,required"`
 	mountpoint string `arg:"mountpoint for bucket,required"`
 	debug      bool   `arg:"enable debug mode"`
+	verbose    bool   `arg:"enable verbose debug mode"`
 }
 
 func main() {
@@ -22,7 +23,7 @@ func main() {
 	}
 	o.MustParse()
 
-	if o.debug {
+	if o.debug || o.verbose {
 		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
 

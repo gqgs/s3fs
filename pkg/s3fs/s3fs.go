@@ -58,7 +58,7 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 				digest := sha1.Sum([]byte(dir))
 				hexdigest := hex.EncodeToString(digest[:])
 
-				if _, err := root.db.Exec("INSERT OR IGNORE INTO files (id, key) VALUES (?, ?)", hexdigest, aws.StringValue(object.Key)); err != nil {
+				if _, err := root.db.Exec("INSERT OR IGNORE INTO files (id, key) VALUES (?, ?)", hexdigest, dir); err != nil {
 					slog.Error("failed inserting data into database", "err", err.Error())
 					panic(err)
 				}
@@ -72,7 +72,7 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 				slog.Debug("creating directory inode", "dir", dir, "hexdigest", hexdigest, "updated_at", timestamp)
 
 				// Create a directory
-				ch = p.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(timestamp.Unix())},
+				ch = p.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(timestamp.Unix()), key: dir},
 					fs.StableAttr{Mode: syscall.S_IFDIR})
 				// Add it
 				p.AddChild(component, ch, true)

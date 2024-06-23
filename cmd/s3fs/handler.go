@@ -28,7 +28,7 @@ func handler(o options) error {
 	}
 
 	server, err := fs.Mount(o.mountpoint, rootInode, &fs.Options{
-		MountOptions: fuse.MountOptions{Debug: o.debug},
+		MountOptions: fuse.MountOptions{Debug: o.verbose},
 	})
 	if err != nil {
 		return err

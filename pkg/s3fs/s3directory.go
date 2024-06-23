@@ -14,10 +14,11 @@ var _ = (fs.NodeGetattrer)((*s3Directory)(nil))
 type s3Directory struct {
 	fs.Inode
 	updateTime uint64
+	key        string
 }
 
 func (d *s3Directory) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
-	slog.Debug("directory getattr call")
+	slog.Debug("directory getattr call", "key", d.key)
 	out.Mode = 07777
 	out.Nlink = 1
 	out.Mtime = d.updateTime
