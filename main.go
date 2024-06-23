@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/sha1"
 	"database/sql"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -46,12 +44,6 @@ func newSqliteStorage(dbName string) (*sql.DB, error) {
 	}
 
 	return db, nil
-}
-
-// files contains the files we will expose as a file system
-var files = map[string]string{
-	"file":              "content",
-	"subdir/other-file": "other-content",
 }
 
 // inMemoryFS is the root of the tree
@@ -135,10 +127,6 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 	}
 
 	for _, object := range objects {
-		fmt.Println("object", object)
-	}
-
-	for _, object := range objects {
 		dir, base := filepath.Split(aws.StringValue(object.Key))
 
 		p := &root.Inode
@@ -162,9 +150,6 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 
 		// Make a file out of the content bytes. This type
 		// provides the open/read/flush methods.
-		// embedder := &fs.MemRegularFile{
-		// 	Data: []byte(content),
-		// }
 		embedder := &s3File{
 			Mutex:    new(sync.Mutex),
 			Object:   object,
@@ -209,12 +194,6 @@ func (f *s3File) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32,
 	}
 
 	f.reader = object.Body
-	// f.data, err = io.ReadAll(object.Body)
-	// if err != nil {
-	// 	return nil, 0, syscall.EIO
-	// }
-	// object.Body.Close()
-
 	return nil, fuse.FOPEN_KEEP_CACHE, fs.OK
 }
 
@@ -226,23 +205,18 @@ func (f *s3File) Read(ctx context.Context, fh fs.FileHandle, dest []byte, off in
 
 	slog.Debug("file read call", "key", *f.Object.Key, "offset", off, "len(dest)", len(dest), "object_size", *f.Object.Size, "size", size)
 
-	data := make([]byte, size)
-	n, err := io.ReadFull(f.reader, data)
+	n, err := io.ReadAtLeast(f.reader, dest, size)
 	if err != nil {
 		return nil, syscall.EIO
 	}
 
-	digest := sha1.Sum(data)
-	hexhash := hex.EncodeToString(digest[:])
+	slog.Debug("file read executed", "key", *f.Object.Key, "read_bytes", n, "len(dest)", len(dest))
 
-	slog.Debug("file read executed", "key", *f.Object.Key, "read_bytes", n, "len(dest)", len(dest), "len(data)", len(data), "size", size, "hash", hexhash)
-
-	return fuse.ReadResultData(data), fs.OK
+	return fuse.ReadResultData(dest[:n]), fs.OK
 }
 
 func (f *s3File) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 	slog.Debug("file getattr call", "key", *f.Object.Key)
-	// out.Mode = uint32(zf.file.Mode()) & 07777
 	out.Mode = 07777
 	out.Nlink = 1
 	out.Mtime = uint64(f.LastModified.Unix())
@@ -267,9 +241,9 @@ func main() {
 		os.Exit(2)
 	}
 
-	// if debug {
-	slog.SetLogLoggerLevel(slog.LevelDebug)
-	//}
+	if debug {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	}
 
 	root, err := News3FS()
 	if err != nil {
