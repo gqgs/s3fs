@@ -11,8 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
