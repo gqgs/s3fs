@@ -196,7 +196,10 @@ type s3File struct {
 
 // Open lazily unpacks zip data
 func (f *s3File) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
-	slog.Debug("file read call", "key", *f.Object.Key)
+	if f.reader != nil {
+		return nil, fuse.FOPEN_KEEP_CACHE, fs.OK
+	}
+	slog.Debug("file open call", "key", *f.Object.Key)
 	object, err := f.s3Client.GetObject(&s3.GetObjectInput{
 		Bucket: storageBucket,
 		Key:    f.Key,
@@ -212,7 +215,7 @@ func (f *s3File) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32,
 	// }
 	// object.Body.Close()
 
-	return nil, fuse.FOPEN_KEEP_CACHE, 0
+	return nil, fuse.FOPEN_KEEP_CACHE, fs.OK
 }
 
 func (f *s3File) Read(ctx context.Context, fh fs.FileHandle, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
@@ -220,16 +223,6 @@ func (f *s3File) Read(ctx context.Context, fh fs.FileHandle, dest []byte, off in
 	defer f.Unlock()
 
 	size := min(int(aws.Int64Value(f.Object.Size)-off), len(dest))
-
-	// end := int(off) + len(dest)
-	// if end > len(f.data) {
-	// 	end = len(f.data)
-	// }
-
-	// data := f.data[off:end]
-
-	// digest := sha1.Sum(data)
-	// hexhash := hex.EncodeToString(digest[:])
 
 	slog.Debug("file read call", "key", *f.Object.Key, "offset", off, "len(dest)", len(dest), "object_size", *f.Object.Size, "size", size)
 
@@ -244,9 +237,7 @@ func (f *s3File) Read(ctx context.Context, fh fs.FileHandle, dest []byte, off in
 
 	slog.Debug("file read executed", "key", *f.Object.Key, "read_bytes", n, "len(dest)", len(dest), "len(data)", len(data), "size", size, "hash", hexhash)
 
-	return fuse.ReadResultData(data), 0
-
-	//return fuse.ReadResultData(dest), 0
+	return fuse.ReadResultData(data), fs.OK
 }
 
 func (f *s3File) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
