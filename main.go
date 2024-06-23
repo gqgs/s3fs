@@ -39,8 +39,10 @@ func newSqliteStorage(dbName string) (*sql.DB, error) {
 	if _, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS files (
 			id TEXT PRIMARY KEY,
+			key string,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`); err != nil {
 		return nil, err
@@ -145,14 +147,14 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 				digest := sha1.Sum([]byte(dir))
 				hexdigest := hex.EncodeToString(digest[:])
 
-				if _, err := root.db.Exec("INSERT OR IGNORE INTO files (id) VALUES (?)", hexdigest); err != nil {
+				if _, err := root.db.Exec("INSERT OR IGNORE INTO files (id, key) VALUES (?, ?)", hexdigest, aws.StringValue(object.Key)); err != nil {
 					slog.Error("failed inserting data into database", "err", err.Error())
 					panic(err)
 				}
 				var timestamp time.Time
 				row := root.db.QueryRow("SELECT updated_at FROM files WHERE id = ?", hexdigest)
-
 				if err := row.Scan(&timestamp); err != nil {
+					slog.Error("failed query database", "err", err.Error())
 					panic(err)
 				}
 
@@ -196,7 +198,6 @@ type s3Directory struct {
 
 func (d *s3Directory) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 	slog.Debug("directory getattr call")
-
 	out.Mode = 07777
 	out.Nlink = 1
 	out.Mtime = d.updateTime
@@ -229,6 +230,7 @@ func (f *s3File) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32,
 		Key:    f.Key,
 	})
 	if err != nil {
+		slog.Error("file open error", "key", *f.Object.Key, "err", err.Error())
 		return nil, 0, syscall.EIO
 	}
 
@@ -244,8 +246,13 @@ func (f *s3File) Read(ctx context.Context, fh fs.FileHandle, dest []byte, off in
 
 	slog.Debug("file read call", "key", *f.Object.Key, "offset", off, "len(dest)", len(dest), "object_size", *f.Object.Size, "size", size)
 
-	n, err := io.ReadAtLeast(f.reader, dest, size)
+	if len(dest) > size {
+		dest = dest[:size]
+	}
+
+	n, err := io.ReadFull(f.reader, dest)
 	if err != nil {
+		slog.Error("file read error", "key", *f.Object.Key, "err", err.Error(), "read_bytes", n, "len(dest)", len(dest))
 		return nil, syscall.EIO
 	}
 
