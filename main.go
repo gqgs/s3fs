@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha1"
 	"database/sql"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -36,9 +38,9 @@ func newSqliteStorage(dbName string) (*sql.DB, error) {
 	}
 	if _, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS files (
-			id INTEGER PRIMARY KEY,
-			created_at INTEGER NULL,
-			updated_at INTEGER NULL
+			id TEXT PRIMARY KEY,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`); err != nil {
 		return nil, err
@@ -128,7 +130,7 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 	}
 
 	for _, object := range objects {
-		dir, base := filepath.Split(aws.StringValue(object.Key))
+		dir, base := filepath.Split(strings.TrimRight(aws.StringValue(object.Key), "/"))
 
 		p := &root.Inode
 
@@ -137,13 +139,31 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 			if len(component) == 0 {
 				continue
 			}
+
 			ch := p.GetChild(component)
 			if ch == nil {
+				digest := sha1.Sum([]byte(dir))
+				hexdigest := hex.EncodeToString(digest[:])
+
+				if _, err := root.db.Exec("INSERT OR IGNORE INTO files (id) VALUES (?)", hexdigest); err != nil {
+					slog.Error("failed inserting data into database", "err", err.Error())
+					panic(err)
+				}
+				var timestamp time.Time
+				row := root.db.QueryRow("SELECT updated_at FROM files WHERE id = ?", hexdigest)
+
+				if err := row.Scan(&timestamp); err != nil {
+					panic(err)
+				}
+
+				slog.Debug("creating directory inode", "dir", dir, "hexdigest", hexdigest, "updated_at", timestamp)
+
 				// Create a directory
-				ch = p.NewPersistentInode(ctx, &s3Directory{},
+				ch = p.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(timestamp.Unix())},
 					fs.StableAttr{Mode: syscall.S_IFDIR})
 				// Add it
 				p.AddChild(component, ch, true)
+
 			}
 
 			p = ch
@@ -171,15 +191,17 @@ var _ = (fs.NodeGetattrer)((*s3Directory)(nil))
 
 type s3Directory struct {
 	fs.Inode
+	updateTime uint64
 }
 
-func (f *s3Directory) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+func (d *s3Directory) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 	slog.Debug("directory getattr call")
+
 	out.Mode = 07777
 	out.Nlink = 1
-	out.Mtime = uint64(time.Now().Unix())
-	out.Atime = uint64(time.Now().Unix())
-	out.Ctime = uint64(time.Now().Unix())
+	out.Mtime = d.updateTime
+	out.Atime = d.updateTime
+	out.Ctime = d.updateTime
 	return 0
 }
 
