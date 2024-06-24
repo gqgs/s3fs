@@ -11,7 +11,7 @@ func NewSqliteDB(dbPath string) (*sql.DB, error) {
 	if _, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS files (
 			id TEXT PRIMARY KEY,
-			key string,
+			path string,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -44,22 +43,30 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 	}
 
 	for _, object := range objects {
-		dir, base := filepath.Split(strings.TrimRight(aws.StringValue(object.Key), "/"))
+		dir, base := filepath.Split(aws.StringValue(object.Key))
 
 		p := &root.Inode
 
+		var path string
+
 		// Add directories leading up to the file.
-		for _, component := range strings.Split(dir, "/") {
+		for i, component := range strings.Split(dir, "/") {
 			if len(component) == 0 {
 				continue
 			}
 
+			if i == 0 {
+				path = component
+			} else {
+				path = filepath.Join(path, component)
+			}
+
 			ch := p.GetChild(component)
 			if ch == nil {
-				digest := sha1.Sum([]byte(dir))
+				digest := sha1.Sum([]byte(path))
 				hexdigest := hex.EncodeToString(digest[:])
 
-				if _, err := root.db.ExecContext(ctx, "INSERT OR IGNORE INTO files (id, key) VALUES (?, ?)", hexdigest, dir); err != nil {
+				if _, err := root.db.ExecContext(ctx, "INSERT OR IGNORE INTO files (id, path) VALUES (?, ?)", hexdigest, path); err != nil {
 					slog.Error("failed inserting data into database", "err", err.Error())
 					log.Fatal(err)
 				}
@@ -73,7 +80,7 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 				slog.Debug("creating directory inode", "dir", dir, "hexdigest", hexdigest, "updated_at", timestamp)
 
 				// Create a directory
-				ch = p.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(timestamp.Unix()), key: dir},
+				ch = p.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(timestamp.Unix()), path: path, s3Client: root.s3Client, bucket: root.bucket},
 					fs.StableAttr{Mode: syscall.S_IFDIR})
 				// Add it
 				p.AddChild(component, ch, true)
@@ -83,12 +90,10 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 			p = ch
 		}
 
-		file := &s3File{
-			Mutex:    new(sync.Mutex),
-			Object:   object,
-			s3Client: root.s3Client,
-			bucket:   root.bucket,
-		}
+		key := aws.StringValue(object.Key)
+		size := aws.Int64Value(object.Size)
+		lastModified := aws.TimeValue(object.LastModified)
+		file := newS3File(key, root.bucket, size, lastModified, root.s3Client)
 
 		// Create the file. The Inode must be persistent,
 		// because its life time is not under control of the
