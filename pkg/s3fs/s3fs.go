@@ -15,7 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/hanwen/go-fuse/v2/fs"
-	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
 var (
@@ -25,7 +24,7 @@ var (
 )
 
 type s3FS struct {
-	fs.Inode
+	s3Directory
 	db       *sql.DB
 	s3Client *s3.S3
 	bucket   string
@@ -33,6 +32,10 @@ type s3FS struct {
 
 func NewFS(db *sql.DB, s3Client *s3.S3, bucket string) (*s3FS, error) {
 	return &s3FS{
+		s3Directory: s3Directory{
+			s3Client: s3Client,
+			bucket:   bucket,
+		},
 		db:       db,
 		s3Client: s3Client,
 		bucket:   bucket,
@@ -130,19 +133,4 @@ func (root *s3FS) listObjects(ctx context.Context) ([]*s3.Object, error) {
 	}
 
 	return objects, nil
-}
-
-func (root *s3FS) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
-	slog.Debug("root create call")
-	panic("not implemented")
-}
-
-func (root *s3FS) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
-	slog.Debug("root mkdir call", "name", name, "mode", mode)
-
-	child := root.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(time.Now().Unix()), path: name, s3Client: root.s3Client, bucket: root.bucket},
-		fs.StableAttr{Mode: syscall.S_IFDIR})
-
-	root.AddChild(name, child, true)
-	return child, fs.OK
 }
