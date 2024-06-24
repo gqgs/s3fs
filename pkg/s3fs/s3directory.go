@@ -15,6 +15,7 @@ import (
 var (
 	_ = (fs.NodeGetattrer)((*s3Directory)(nil))
 	_ = (fs.NodeCreater)((*s3Directory)(nil))
+	_ = (fs.NodeMkdirer)((*s3Directory)(nil))
 )
 
 type s3Directory struct {
@@ -36,13 +37,9 @@ func (d *s3Directory) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.A
 }
 
 func (f *s3Directory) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
-	slog.Debug("directory create call", "name", name, "flags", flags, "mode", mode, "out", out)
+	slog.Debug("directory create call", "name", name, "flags", flags, "mode", mode, "f.path", f.path)
 
 	path := filepath.Join(f.path, name)
-
-	// TODO: handle directories
-	//ch = f.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(time.Now().Unix()), path: path},
-	//	fs.StableAttr{Mode: syscall.S_IFDIR})
 
 	key := path
 	size := int64(0)
@@ -51,5 +48,19 @@ func (f *s3Directory) Create(ctx context.Context, name string, flags uint32, mod
 
 	child := f.NewPersistentInode(ctx, file, fs.StableAttr{})
 
+	f.AddChild(name, child, true)
+
 	return child, nil, 0, fs.OK
+}
+
+func (f *s3Directory) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+	slog.Debug("directory mkdir call", "name", name, "mode", mode, "f.path", f.path)
+
+	path := filepath.Join(f.path, name)
+
+	child := f.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(time.Now().Unix()), path: path, s3Client: f.s3Client, bucket: f.bucket},
+		fs.StableAttr{Mode: syscall.S_IFDIR})
+
+	f.AddChild(name, child, true)
+	return child, fs.OK
 }
