@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
@@ -24,6 +25,7 @@ type s3Directory struct {
 	path       string
 	s3Client   *s3.S3
 	bucket     string
+	uploader   *s3manager.Uploader
 }
 
 func (d *s3Directory) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
@@ -44,7 +46,7 @@ func (f *s3Directory) Create(ctx context.Context, name string, flags uint32, mod
 	key := path
 	size := int64(0)
 	lastModified := time.Now()
-	file := newS3File(key, f.bucket, size, lastModified, f.s3Client)
+	file := newS3File(key, f.bucket, size, lastModified, f.s3Client, f.uploader)
 
 	child := f.NewPersistentInode(ctx, file, fs.StableAttr{})
 
@@ -58,7 +60,7 @@ func (f *s3Directory) Mkdir(ctx context.Context, name string, mode uint32, out *
 
 	path := filepath.Join(f.path, name)
 
-	child := f.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(time.Now().Unix()), path: path, s3Client: f.s3Client, bucket: f.bucket},
+	child := f.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(time.Now().Unix()), path: path, s3Client: f.s3Client, bucket: f.bucket, uploader: f.uploader},
 		fs.StableAttr{Mode: syscall.S_IFDIR})
 
 	f.AddChild(name, child, true)

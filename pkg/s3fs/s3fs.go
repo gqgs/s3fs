@@ -14,6 +14,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/hanwen/go-fuse/v2/fs"
 )
 
@@ -28,17 +29,20 @@ type s3FS struct {
 	db       *sql.DB
 	s3Client *s3.S3
 	bucket   string
+	uploader *s3manager.Uploader
 }
 
-func NewFS(db *sql.DB, s3Client *s3.S3, bucket string) (*s3FS, error) {
+func NewFS(db *sql.DB, s3Client *s3.S3, uploader *s3manager.Uploader, bucket string) (*s3FS, error) {
 	return &s3FS{
 		s3Directory: s3Directory{
 			s3Client: s3Client,
 			bucket:   bucket,
+			uploader: uploader,
 		},
 		db:       db,
 		s3Client: s3Client,
 		bucket:   bucket,
+		uploader: uploader,
 	}, nil
 }
 
@@ -88,7 +92,7 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 				slog.Debug("creating directory inode", "dir", dir, "hexdigest", hexdigest, "updated_at", timestamp)
 
 				// Create a directory
-				ch = p.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(timestamp.Unix()), path: path, s3Client: root.s3Client, bucket: root.bucket},
+				ch = p.NewPersistentInode(ctx, &s3Directory{updateTime: uint64(timestamp.Unix()), path: path, s3Client: root.s3Client, bucket: root.bucket, uploader: root.uploader},
 					fs.StableAttr{Mode: syscall.S_IFDIR})
 				// Add it
 				p.AddChild(component, ch, true)
@@ -101,7 +105,7 @@ func (root *s3FS) OnAdd(ctx context.Context) {
 		key := aws.StringValue(object.Key)
 		size := aws.Int64Value(object.Size)
 		lastModified := aws.TimeValue(object.LastModified)
-		file := newS3File(key, root.bucket, size, lastModified, root.s3Client)
+		file := newS3File(key, root.bucket, size, lastModified, root.s3Client, root.uploader)
 
 		// Create the file. The Inode must be persistent,
 		// because its life time is not under control of the

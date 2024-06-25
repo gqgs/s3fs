@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
@@ -31,9 +32,10 @@ type s3File struct {
 	data         []byte
 	size         uint64
 	lastModified uint64
+	uploader     *s3manager.Uploader
 }
 
-func newS3File(key, bucket string, size int64, lastModified time.Time, s3client *s3.S3) *s3File {
+func newS3File(key, bucket string, size int64, lastModified time.Time, s3client *s3.S3, uploader *s3manager.Uploader) *s3File {
 	return &s3File{
 		mu:           new(sync.Mutex),
 		key:          key,
@@ -41,6 +43,7 @@ func newS3File(key, bucket string, size int64, lastModified time.Time, s3client 
 		size:         uint64(size),
 		lastModified: uint64(lastModified.Unix()),
 		s3Client:     s3client,
+		uploader:     uploader,
 	}
 }
 
@@ -94,7 +97,7 @@ func (f *s3File) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOu
 	out.Atime = f.lastModified
 	out.Ctime = f.lastModified
 	out.Size = f.size
-	return 0
+	return fs.OK
 }
 
 func (f *s3File) Write(ctx context.Context, fh fs.FileHandle, data []byte, off int64) (written uint32, errno syscall.Errno) {
@@ -106,13 +109,13 @@ func (f *s3File) Write(ctx context.Context, fh fs.FileHandle, data []byte, off i
 }
 
 func (f *s3File) Flush(ctx context.Context, fh fs.FileHandle) syscall.Errno {
-	slog.Debug("write flush call", "fh", fh)
+	slog.Debug("write flush call", "fh", fh, "key", f.key)
 
 	if len(f.data) == 0 {
 		return fs.OK
 	}
 
-	if _, err := f.s3Client.PutObjectWithContext(ctx, &s3.PutObjectInput{
+	if _, err := f.uploader.UploadWithContext(ctx, &s3manager.UploadInput{
 		Key:    &f.key,
 		Bucket: &f.bucket,
 		Body:   bytes.NewReader(f.data),
