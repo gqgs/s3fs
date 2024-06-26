@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
-	"sync"
 	"syscall"
 	"time"
 
@@ -23,7 +22,6 @@ var (
 type file struct {
 	fs.Inode
 	s3wrapper    s3wrapper.Wrapper
-	mu           *sync.Mutex
 	key          string
 	data         []byte
 	size         uint64
@@ -33,7 +31,6 @@ type file struct {
 
 func New(key string, lastModified time.Time, size int64, s3wrapper s3wrapper.Wrapper) *file {
 	return &file{
-		mu:           new(sync.Mutex),
 		key:          key,
 		lastModified: uint64(lastModified.Unix()),
 		size:         uint64(size),
@@ -49,9 +46,6 @@ func (f *file) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, s
 }
 
 func (f *file) Read(ctx context.Context, fh fs.FileHandle, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
 	size := min(int(int64(f.size)-off), len(dest))
 
 	f.logger.Debug("file read call", "key", f.key, "offset", off, "len(dest)", len(dest), "object_size", f.size, "size", size)
