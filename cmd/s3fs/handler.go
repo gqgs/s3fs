@@ -10,8 +10,6 @@ import (
 	"github.com/gqgs/s3fs/pkg/storage"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 func handler(o options) error {

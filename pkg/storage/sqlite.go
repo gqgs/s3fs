@@ -1,6 +1,10 @@
 package storage
 
-import "database/sql"
+import (
+	"database/sql"
+
+	_ "github.com/mattn/go-sqlite3"
+)
 
 // Should be closed after being used
 func NewSqliteDB(dbPath string) (*sql.DB, error) {
