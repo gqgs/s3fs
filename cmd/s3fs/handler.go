@@ -5,8 +5,8 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/gqgs/s3fs/pkg/s3fs"
+	"github.com/gqgs/s3fs/pkg/s3root"
+	"github.com/gqgs/s3fs/pkg/s3wrapper"
 	"github.com/gqgs/s3fs/pkg/storage"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
@@ -16,15 +16,15 @@ import (
 
 func handler(o options) error {
 	sess := session.Must(session.NewSession())
-	s3Client := s3.New(sess)
-	uploader := s3manager.NewUploader(sess)
+	s3client := s3.New(sess)
+	s3wrapper := s3wrapper.New(s3client, o.bucket)
 
 	storage, err := storage.NewSqliteDB(o.db)
 	if err != nil {
 		return err
 	}
 
-	rootInode, err := s3fs.NewFS(storage, s3Client, uploader, o.bucket)
+	rootInode, err := s3root.New(storage, s3wrapper)
 	if err != nil {
 		return err
 	}
