@@ -15,6 +15,8 @@ func (o *options) flagSet() *flag.FlagSet {
     flagSet.StringVar(&o.bucket, "bucket", o.bucket, "S3 bucket to mount")
     flagSet.StringVar(&o.mountpoint, "mountpoint", o.mountpoint, "mountpoint for bucket")
     flagSet.BoolVar(&o.debug, "debug", o.debug, "enable debug mode")
+    flagSet.BoolVar(&o.verbose, "verbose", o.verbose, "enable verbose debug mode")
+    flagSet.IntVar(&o.concurrency, "concurrency", o.concurrency, "concurrency level for upload/download")
     return flagSet
 }
 

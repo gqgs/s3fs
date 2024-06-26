@@ -17,7 +17,7 @@ import (
 func handler(o options) error {
 	sess := session.Must(session.NewSession())
 	s3client := s3.New(sess)
-	s3wrapper := s3wrapper.New(s3client, o.bucket)
+	s3wrapper := s3wrapper.New(s3client, o.bucket, o.concurrency)
 
 	storage, err := storage.NewSqliteDB(o.db)
 	if err != nil {
