@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -23,6 +24,7 @@ type s3wrapper struct {
 	*s3manager.Uploader
 	s3client *s3.S3
 	bucket   string
+	logger   *slog.Logger
 }
 
 func New(s3client *s3.S3, bucket string) *s3wrapper {
@@ -31,10 +33,13 @@ func New(s3client *s3.S3, bucket string) *s3wrapper {
 		Uploader:   s3manager.NewUploaderWithClient(s3client),
 		s3client:   s3client,
 		bucket:     bucket,
+		logger:     slog.Default().WithGroup("s3wrapper"),
 	}
 }
 
 func (w *s3wrapper) UploadFile(ctx context.Context, key string, reader io.Reader) error {
+	w.logger.Debug("upload file call", "key", key)
+
 	_, err := w.Uploader.UploadWithContext(ctx, &s3manager.UploadInput{
 		Key:    &key,
 		Bucket: &w.bucket,
@@ -44,6 +49,8 @@ func (w *s3wrapper) UploadFile(ctx context.Context, key string, reader io.Reader
 }
 
 func (w *s3wrapper) DownloadRange(ctx context.Context, key string, dest []byte, off, size int) (n int64, err error) {
+	w.logger.Debug("download range call", "key", key, "len(dest)", len(dest), "off", off, "size", size)
+
 	return w.Downloader.DownloadWithContext(ctx, aws.NewWriteAtBuffer(dest), &s3.GetObjectInput{
 		Bucket: &w.bucket,
 		Key:    &key,
@@ -54,6 +61,8 @@ func (w *s3wrapper) DownloadRange(ctx context.Context, key string, dest []byte, 
 }
 
 func (w *s3wrapper) ListObjects(ctx context.Context) ([]*s3.Object, error) {
+	w.logger.Debug("list objects call")
+
 	var objects []*s3.Object
 	for {
 		var continuationToken *string
@@ -62,6 +71,7 @@ func (w *s3wrapper) ListObjects(ctx context.Context) ([]*s3.Object, error) {
 			ContinuationToken: continuationToken,
 		})
 		if err != nil {
+			w.logger.Error("list objects call error", "err", err)
 			return nil, err
 		}
 

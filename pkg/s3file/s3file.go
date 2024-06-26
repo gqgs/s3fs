@@ -22,13 +22,13 @@ var (
 
 type file struct {
 	fs.Inode
-	s3wrapper s3wrapper.Wrapper
-	mu        *sync.Mutex
-	// reader       io.Reader
+	s3wrapper    s3wrapper.Wrapper
+	mu           *sync.Mutex
 	key          string
 	data         []byte
 	size         uint64
 	lastModified uint64
+	logger       *slog.Logger
 }
 
 func New(key string, lastModified time.Time, size int64, s3wrapper s3wrapper.Wrapper) *file {
@@ -38,11 +38,13 @@ func New(key string, lastModified time.Time, size int64, s3wrapper s3wrapper.Wra
 		lastModified: uint64(lastModified.Unix()),
 		size:         uint64(size),
 		s3wrapper:    s3wrapper,
+		logger:       slog.Default().WithGroup("s3file"),
 	}
 }
 
 func (f *file) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
-	slog.Debug("file open call", "key", f.key)
+	f.logger.Debug("file open call", "key", f.key)
+
 	return nil, fuse.FOPEN_KEEP_CACHE, fs.OK
 }
 
@@ -52,7 +54,7 @@ func (f *file) Read(ctx context.Context, fh fs.FileHandle, dest []byte, off int6
 
 	size := min(int(int64(f.size)-off), len(dest))
 
-	slog.Debug("file read call", "key", f.key, "offset", off, "len(dest)", len(dest), "object_size", f.size, "size", size)
+	f.logger.Debug("file read call", "key", f.key, "offset", off, "len(dest)", len(dest), "object_size", f.size, "size", size)
 
 	if len(dest) > size {
 		dest = dest[:size]
@@ -60,16 +62,17 @@ func (f *file) Read(ctx context.Context, fh fs.FileHandle, dest []byte, off int6
 
 	n, err := f.s3wrapper.DownloadRange(ctx, f.key, dest, int(off), size)
 	if err != nil {
-		slog.Error("file download error", "key", f.key, "err", err.Error(), "read_bytes", n, "len(dest)", len(dest))
+		f.logger.Error("file download error", "key", f.key, "err", err, "read_bytes", n, "len(dest)", len(dest))
 		return nil, fs.ToErrno(err)
 	}
 
-	slog.Debug("file read executed", "key", f.key, "read_bytes", n, "len(dest)", len(dest))
+	f.logger.Debug("file read executed", "key", f.key, "read_bytes", n, "len(dest)", len(dest))
 	return fuse.ReadResultData(dest[:n]), fs.OK
 }
 
 func (f *file) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
-	slog.Debug("file getattr call", "key", f.key)
+	f.logger.Debug("file getattr call", "key", f.key)
+
 	out.Mode = 07777
 	out.Nlink = 1
 	out.Mtime = f.lastModified
@@ -80,22 +83,21 @@ func (f *file) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut)
 }
 
 func (f *file) Write(ctx context.Context, fh fs.FileHandle, data []byte, off int64) (written uint32, errno syscall.Errno) {
-	slog.Debug("write file call", "off", off, "len(data)", len(data))
+	f.logger.Debug("write file call", "off", off, "len(data)", len(data))
 
 	f.data = append(f.data, data...)
-
 	return uint32(len(data)), fs.OK
 }
 
 func (f *file) Flush(ctx context.Context, fh fs.FileHandle) syscall.Errno {
-	slog.Debug("write flush call", "fh", fh, "key", f.key)
+	f.logger.Debug("write flush call", "fh", fh, "key", f.key)
 
 	if len(f.data) == 0 {
 		return fs.OK
 	}
 
 	if err := f.s3wrapper.UploadFile(ctx, f.key, bytes.NewReader(f.data)); err != nil {
-		slog.Error("error flushing file put object error", "err", err)
+		f.logger.Error("error flushing file put object error", "err", err)
 		return fs.ToErrno(err)
 	}
 

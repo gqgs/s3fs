@@ -35,6 +35,7 @@ type root struct {
 	s3Client  *s3.S3
 	bucket    string
 	s3wrapper s3wrapper.Wrapper
+	logger    *slog.Logger
 }
 
 func New(db *sql.DB, s3wrapper s3wrapper.Wrapper) (*root, error) {
@@ -42,11 +43,12 @@ func New(db *sql.DB, s3wrapper s3wrapper.Wrapper) (*root, error) {
 		InodeEmbedder: s3directory.New("", time.Now(), s3wrapper),
 		db:            db,
 		s3wrapper:     s3wrapper,
+		logger:        slog.Default().WithGroup("s3root"),
 	}, nil
 }
 
 func (r *root) OnAdd(ctx context.Context) {
-	slog.Debug("onAdd called")
+	r.logger.Debug("onAdd called")
 
 	objects, err := r.s3wrapper.ListObjects(ctx)
 	if err != nil {
@@ -78,17 +80,17 @@ func (r *root) OnAdd(ctx context.Context) {
 				hexdigest := hex.EncodeToString(digest[:])
 
 				if _, err := r.db.ExecContext(ctx, "INSERT OR IGNORE INTO files (id, path) VALUES (?, ?)", hexdigest, path); err != nil {
-					slog.Error("failed inserting data into database", "err", err.Error())
+					r.logger.Error("failed inserting data into database", "err", err.Error())
 					log.Fatal(err)
 				}
 				var timestamp time.Time
 				row := r.db.QueryRowContext(ctx, "SELECT updated_at FROM files WHERE id = ?", hexdigest)
 				if err := row.Scan(&timestamp); err != nil {
-					slog.Error("failed query database", "err", err.Error())
+					r.logger.Error("failed query database", "err", err.Error())
 					log.Fatal(err)
 				}
 
-				slog.Debug("creating directory inode", "dir", dir, "hexdigest", hexdigest, "updated_at", timestamp)
+				r.logger.Debug("creating directory inode", "dir", dir, "hexdigest", hexdigest, "updated_at", timestamp)
 
 				// Create a directory
 				ch = p.NewPersistentInode(ctx, s3directory.New(path, timestamp, r.s3wrapper),
