@@ -22,20 +22,22 @@ type Wrapper interface {
 type s3wrapper struct {
 	*s3manager.Downloader
 	*s3manager.Uploader
-	s3client    *s3.S3
-	logger      *slog.Logger
-	bucket      string
-	concurrency int
+	s3client *s3.S3
+	logger   *slog.Logger
+	bucket   string
 }
 
 func New(s3client *s3.S3, bucket string, concurrency int) *s3wrapper {
 	return &s3wrapper{
-		Downloader:  s3manager.NewDownloaderWithClient(s3client),
-		Uploader:    s3manager.NewUploaderWithClient(s3client),
-		s3client:    s3client,
-		bucket:      bucket,
-		logger:      slog.Default().WithGroup("s3wrapper"),
-		concurrency: concurrency,
+		Downloader: s3manager.NewDownloaderWithClient(s3client, func(o *s3manager.Downloader) {
+			o.Concurrency = concurrency
+		}),
+		Uploader: s3manager.NewUploaderWithClient(s3client, func(o *s3manager.Uploader) {
+			o.Concurrency = concurrency
+		}),
+		s3client: s3client,
+		bucket:   bucket,
+		logger:   slog.Default().WithGroup("s3wrapper"),
 	}
 }
 
@@ -46,8 +48,6 @@ func (w *s3wrapper) UploadFile(ctx context.Context, key string, reader io.Reader
 		Key:    &key,
 		Bucket: &w.bucket,
 		Body:   reader,
-	}, func(d *s3manager.Uploader) {
-		d.Concurrency = w.concurrency
 	})
 	return err
 }
@@ -59,8 +59,6 @@ func (w *s3wrapper) DownloadRange(ctx context.Context, key string, dest []byte, 
 		Bucket: &w.bucket,
 		Key:    &key,
 		Range:  aws.String(fmt.Sprintf("bytes=%d-%d", off, off+size-1)),
-	}, func(d *s3manager.Downloader) {
-		d.Concurrency = w.concurrency
 	})
 }
 
