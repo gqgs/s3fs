@@ -26,6 +26,7 @@ func handler(o options) error {
 	if err != nil {
 		return err
 	}
+	defer storage.Close()
 
 	rootInode, err := s3root.New(storage, s3wrapper)
 	if err != nil {
