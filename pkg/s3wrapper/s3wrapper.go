@@ -67,22 +67,16 @@ func (w *s3wrapper) ListObjects(ctx context.Context) ([]types.Object, error) {
 	w.logger.Debug("list objects call")
 
 	var objects []types.Object
-	for {
-		var continuationToken *string
-		listObjectsResult, err := w.s3client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
-			Bucket:            &w.bucket,
-			ContinuationToken: continuationToken,
-		})
+	paginator := s3.NewListObjectsV2Paginator(w.s3client, &s3.ListObjectsV2Input{
+		Bucket: &w.bucket,
+	})
+	for paginator.HasMorePages() {
+		result, err := paginator.NextPage(ctx)
 		if err != nil {
-			w.logger.Error("list objects call error", "err", err)
+			w.logger.Error("next page call error", "err", err)
 			return nil, err
 		}
-
-		objects = append(objects, listObjectsResult.Contents...)
-		continuationToken = listObjectsResult.ContinuationToken
-		if continuationToken == nil {
-			break
-		}
+		objects = append(objects, result.Contents...)
 	}
 
 	return objects, nil
