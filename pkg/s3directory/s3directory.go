@@ -13,11 +13,13 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
-var (
-	_ = (fs.NodeGetattrer)((*directory)(nil))
-	_ = (fs.NodeCreater)((*directory)(nil))
-	_ = (fs.NodeMkdirer)((*directory)(nil))
-)
+var _ = (directoryInterface)((*directory)(nil))
+
+type directoryInterface interface {
+	fs.NodeGetattrer
+	fs.NodeCreater
+	fs.NodeMkdirer
+}
 
 type directory struct {
 	fs.Inode

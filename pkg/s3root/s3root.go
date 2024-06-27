@@ -19,16 +19,19 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 )
 
-var (
-	_ = (fs.NodeOnAdder)((*root)(nil))
-	_ = (fs.NodeCreater)((*root)(nil))
-	_ = (fs.NodeMkdirer)((*root)(nil))
-)
+var _ = (rootInterface)((*root)(nil))
 
-type root struct {
+type rootInterface interface {
 	fs.InodeEmbedder
+	fs.NodeOnAdder
 	fs.NodeCreater
 	fs.NodeMkdirer
+}
+
+type root struct {
+	fs.InodeEmbedder // implemented by fs.Inode
+	fs.NodeCreater   // implemented by s3directory
+	fs.NodeMkdirer   // implemented by s3directory
 
 	db        *sql.DB
 	s3wrapper s3wrapper.Wrapper

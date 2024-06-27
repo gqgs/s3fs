@@ -12,12 +12,14 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
-var (
-	_ = (fs.NodeOpener)((*file)(nil))
-	_ = (fs.NodeGetattrer)((*file)(nil))
-	_ = (fs.NodeReader)((*file)(nil))
-	_ = (fs.NodeWriter)((*file)(nil))
-)
+var _ = (fileInterface)((*file)(nil))
+
+type fileInterface interface {
+	fs.NodeOpener
+	fs.NodeGetattrer
+	fs.NodeReader
+	fs.NodeWriter
+}
 
 type file struct {
 	fs.Inode
