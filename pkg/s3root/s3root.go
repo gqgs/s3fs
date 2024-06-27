@@ -2,9 +2,7 @@ package s3root
 
 import (
 	"context"
-	"crypto/sha1"
 	"database/sql"
-	"encoding/hex"
 	"log"
 	"log/slog"
 	"path/filepath"
@@ -61,7 +59,6 @@ func (r *root) OnAdd(ctx context.Context) {
 		p := r.EmbeddedInode()
 
 		var path string
-
 		// Add directories leading up to the file.
 		for i, component := range strings.Split(dir, "/") {
 			if len(component) == 0 {
@@ -74,33 +71,30 @@ func (r *root) OnAdd(ctx context.Context) {
 				path = filepath.Join(path, component)
 			}
 
-			ch := p.GetChild(component)
-			if ch == nil {
-				digest := sha1.Sum([]byte(path))
-				hexdigest := hex.EncodeToString(digest[:])
-
-				if _, err := r.db.ExecContext(ctx, "INSERT OR IGNORE INTO files (id, path) VALUES (?, ?)", hexdigest, path); err != nil {
-					r.logger.Error("failed inserting data into database", "err", err.Error())
+			child := p.GetChild(component)
+			if child == nil {
+				if _, err := r.db.ExecContext(ctx, "INSERT OR IGNORE INTO files (path) VALUES (?)", path); err != nil {
+					r.logger.Error("failed inserting data into database", "err", err)
 					log.Fatal(err)
 				}
 				var timestamp time.Time
-				row := r.db.QueryRowContext(ctx, "SELECT updated_at FROM files WHERE id = ?", hexdigest)
+				row := r.db.QueryRowContext(ctx, "SELECT updated_at FROM files WHERE path = ?", path)
 				if err := row.Scan(&timestamp); err != nil {
-					r.logger.Error("failed query database", "err", err.Error())
+					r.logger.Error("failed query database", "err", err)
 					log.Fatal(err)
 				}
 
-				r.logger.Debug("creating directory inode", "dir", dir, "hexdigest", hexdigest, "updated_at", timestamp)
+				r.logger.Debug("creating directory inode", "dir", dir, "path", path, "updated_at", timestamp)
 
 				// Create a directory
-				ch = p.NewPersistentInode(ctx, s3directory.New(path, timestamp, r.s3wrapper),
+				child = p.NewPersistentInode(ctx, s3directory.New(path, timestamp, r.s3wrapper),
 					fs.StableAttr{Mode: syscall.S_IFDIR})
 				// Add it
-				p.AddChild(component, ch, true)
+				p.AddChild(component, child, true)
 
 			}
 
-			p = ch
+			p = child
 		}
 
 		key := aws.ToString(object.Key)
