@@ -12,8 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/gqgs/s3fs/pkg/s3directory"
 	"github.com/gqgs/s3fs/pkg/s3file"
 	"github.com/gqgs/s3fs/pkg/s3wrapper"
@@ -32,8 +31,6 @@ type root struct {
 	fs.NodeMkdirer
 
 	db        *sql.DB
-	s3Client  *s3.S3
-	bucket    string
 	s3wrapper s3wrapper.Wrapper
 	logger    *slog.Logger
 }
@@ -56,7 +53,7 @@ func (r *root) OnAdd(ctx context.Context) {
 	}
 
 	for _, object := range objects {
-		dir, base := filepath.Split(aws.StringValue(object.Key))
+		dir, base := filepath.Split(aws.ToString(object.Key))
 
 		p := r.EmbeddedInode()
 
@@ -103,9 +100,9 @@ func (r *root) OnAdd(ctx context.Context) {
 			p = ch
 		}
 
-		key := aws.StringValue(object.Key)
-		size := aws.Int64Value(object.Size)
-		lastModified := aws.TimeValue(object.LastModified)
+		key := aws.ToString(object.Key)
+		size := aws.ToInt64(object.Size)
+		lastModified := aws.ToTime(object.LastModified)
 		file := s3file.New(key, lastModified, size, r.s3wrapper)
 
 		// Create the file. The Inode must be persistent,

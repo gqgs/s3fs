@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
 
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gqgs/s3fs/pkg/s3root"
 	"github.com/gqgs/s3fs/pkg/s3wrapper"
 	"github.com/gqgs/s3fs/pkg/storage"
@@ -13,8 +14,12 @@ import (
 )
 
 func handler(o options) error {
-	sess := session.Must(session.NewSession())
-	s3client := s3.New(sess)
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		return err
+	}
+
+	s3client := s3.NewFromConfig(cfg)
 	s3wrapper := s3wrapper.New(s3client, o.bucket, o.concurrency)
 
 	storage, err := storage.NewSqliteDB(o.db)
