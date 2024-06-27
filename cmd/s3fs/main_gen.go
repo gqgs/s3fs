@@ -17,6 +17,7 @@ func (o *options) flagSet() *flag.FlagSet {
     flagSet.BoolVar(&o.debug, "debug", o.debug, "enable debug mode")
     flagSet.BoolVar(&o.verbose, "verbose", o.verbose, "enable verbose debug mode")
     flagSet.IntVar(&o.concurrency, "concurrency", o.concurrency, "concurrency level for upload/download")
+    flagSet.BoolVar(&o.profile, "profile", o.profile, "create CPU profile")
     return flagSet
 }
 

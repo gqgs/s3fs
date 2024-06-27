@@ -1,6 +1,6 @@
 
 build: generate
-	go build ./cmd/s3fs
+	go build -pgo=default.pgo ./cmd/s3fs
 
 generate:
 	go generate ./...
