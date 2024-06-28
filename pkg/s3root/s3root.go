@@ -20,17 +20,19 @@ import (
 var _ = (rootInterface)((*root)(nil))
 
 type rootInterface interface {
-	fs.InodeEmbedder
+	directory
 	fs.NodeOnAdder
+}
+
+type directory interface {
+	fs.InodeEmbedder
 	fs.NodeCreater
 	fs.NodeMkdirer
+	fs.NodeGetattrer
 }
 
 type root struct {
-	fs.InodeEmbedder // implemented by fs.Inode
-	fs.NodeCreater   // implemented by s3directory
-	fs.NodeMkdirer   // implemented by s3directory
-
+	directory
 	db        *sql.DB
 	s3wrapper s3wrapper.Wrapper
 	logger    *slog.Logger
@@ -38,10 +40,10 @@ type root struct {
 
 func New(db *sql.DB, s3wrapper s3wrapper.Wrapper) (*root, error) {
 	return &root{
-		InodeEmbedder: s3directory.New("", time.Now(), s3wrapper),
-		db:            db,
-		s3wrapper:     s3wrapper,
-		logger:        slog.Default().WithGroup("s3root"),
+		directory: s3directory.New("", time.Now(), s3wrapper),
+		db:        db,
+		s3wrapper: s3wrapper,
+		logger:    slog.Default().WithGroup("s3root"),
 	}, nil
 }
 
@@ -90,7 +92,7 @@ func (r *root) OnAdd(ctx context.Context) {
 				child = p.NewPersistentInode(ctx, s3directory.New(path, timestamp, r.s3wrapper),
 					fs.StableAttr{Mode: syscall.S_IFDIR})
 				// Add it
-				p.AddChild(component, child, true)
+				p.AddChild(component, child, false)
 
 			}
 
@@ -108,6 +110,6 @@ func (r *root) OnAdd(ctx context.Context) {
 		child := p.NewPersistentInode(ctx, file, fs.StableAttr{})
 
 		// And add it
-		p.AddChild(base, child, true)
+		p.AddChild(base, child, false)
 	}
 }
