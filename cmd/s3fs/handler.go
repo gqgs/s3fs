@@ -14,7 +14,10 @@ import (
 )
 
 func handler(o options) error {
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return err
 	}
@@ -22,13 +25,13 @@ func handler(o options) error {
 	s3client := s3.NewFromConfig(cfg)
 	s3wrapper := s3wrapper.New(s3client, o.bucket, o.concurrency)
 
-	storage, err := storage.NewSqliteDB(o.db)
+	storage, err := storage.NewSqlite(o.db)
 	if err != nil {
 		return err
 	}
 	defer storage.Close()
 
-	rootInode, err := s3root.New(storage, s3wrapper)
+	rootInode, err := s3root.New(ctx, s3wrapper)
 	if err != nil {
 		return err
 	}

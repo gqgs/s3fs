@@ -9,6 +9,7 @@ import (
 
 	"github.com/gqgs/s3fs/pkg/s3file"
 	"github.com/gqgs/s3fs/pkg/s3wrapper"
+	"github.com/gqgs/s3fs/pkg/storage"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
@@ -29,13 +30,23 @@ type directory struct {
 	logger     *slog.Logger
 }
 
-func New(path string, lastUpdated time.Time, s3wrapper s3wrapper.Wrapper) *directory {
+func New(ctx context.Context, path string, s3wrapper s3wrapper.Wrapper) (*directory, error) {
+	logger := slog.Default().WithGroup("s3directory")
+	logger.Debug("creating new directory", "path", path)
+
+	lastUpdated, err := storage.Default().InsertPath(ctx, path, time.Now())
+	if err != nil {
+		logger.Error("error creating new directory", "path", path, "err", err)
+		return nil, err
+	}
+
+	logger.Debug("created directory inode", "path", path, "lastUpdated", lastUpdated)
 	return &directory{
 		updateTime: uint64(lastUpdated.Unix()),
 		path:       path,
 		s3wrapper:  s3wrapper,
-		logger:     slog.Default().WithGroup("s3directory"),
-	}
+		logger:     logger,
+	}, nil
 }
 
 func (d *directory) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
@@ -57,7 +68,12 @@ func (d *directory) Create(ctx context.Context, name string, flags uint32, mode 
 	size := int64(0)
 	lastModified := time.Now()
 
-	file := s3file.New(key, lastModified, size, d.s3wrapper)
+	file, err := s3file.New(ctx, key, lastModified, size, d.s3wrapper)
+	if err != nil {
+		d.logger.Error("error creating new file", "key", key, "err", err)
+		return nil, nil, 0, fs.ToErrno(err)
+	}
+
 	child := d.NewPersistentInode(ctx, file, fs.StableAttr{})
 	d.AddChild(name, child, true)
 	return child, nil, 0, fs.OK
@@ -67,8 +83,12 @@ func (d *directory) Mkdir(ctx context.Context, name string, mode uint32, out *fu
 	d.logger.Debug("directory mkdir call", "name", name, "mode", mode, "d.path", d.path)
 
 	path := filepath.Join(d.path, name)
-	child := d.NewPersistentInode(ctx, New(path, time.Now(), d.s3wrapper),
-		fs.StableAttr{Mode: syscall.S_IFDIR})
+	newDirectory, err := New(ctx, path, d.s3wrapper)
+	if err != nil {
+		return nil, fs.ToErrno(err)
+	}
+
+	child := d.NewPersistentInode(ctx, newDirectory, fs.StableAttr{Mode: syscall.S_IFDIR})
 	d.AddChild(name, child, true)
 	return child, fs.OK
 }

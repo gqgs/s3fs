@@ -2,13 +2,11 @@ package s3root
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"log/slog"
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/gqgs/s3fs/pkg/s3directory"
@@ -33,17 +31,25 @@ type directory interface {
 
 type root struct {
 	directory
-	db        *sql.DB
 	s3wrapper s3wrapper.Wrapper
 	logger    *slog.Logger
 }
 
-func New(db *sql.DB, s3wrapper s3wrapper.Wrapper) (*root, error) {
+func New(ctx context.Context, s3wrapper s3wrapper.Wrapper) (*root, error) {
+	logger := slog.Default().WithGroup("s3root")
+	logger.Debug("creating new root")
+
+	directory, err := s3directory.New(ctx, "", s3wrapper)
+	if err != nil {
+		logger.Error("error creating new root directory", "err", err)
+		return nil, err
+	}
+
+	logger.Debug("created new root")
 	return &root{
-		directory: s3directory.New("", time.Now(), s3wrapper),
-		db:        db,
+		directory: directory,
 		s3wrapper: s3wrapper,
-		logger:    slog.Default().WithGroup("s3root"),
+		logger:    logger,
 	}, nil
 }
 
@@ -75,22 +81,14 @@ func (r *root) OnAdd(ctx context.Context) {
 
 			child := p.GetChild(component)
 			if child == nil {
-				if _, err := r.db.ExecContext(ctx, "INSERT OR IGNORE INTO files (path) VALUES (?)", path); err != nil {
+				directory, err := s3directory.New(ctx, path, r.s3wrapper)
+				if err != nil {
 					r.logger.Error("failed inserting data into database", "err", err)
 					log.Fatal(err)
 				}
-				var timestamp time.Time
-				row := r.db.QueryRowContext(ctx, "SELECT updated_at FROM files WHERE path = ?", path)
-				if err := row.Scan(&timestamp); err != nil {
-					r.logger.Error("failed query database", "err", err)
-					log.Fatal(err)
-				}
-
-				r.logger.Debug("creating directory inode", "dir", dir, "path", path, "updated_at", timestamp)
 
 				// Create a directory
-				child = p.NewPersistentInode(ctx, s3directory.New(path, timestamp, r.s3wrapper),
-					fs.StableAttr{Mode: syscall.S_IFDIR})
+				child = p.NewPersistentInode(ctx, directory, fs.StableAttr{Mode: syscall.S_IFDIR})
 				// Add it
 				p.AddChild(component, child, false)
 
@@ -102,7 +100,11 @@ func (r *root) OnAdd(ctx context.Context) {
 		key := aws.ToString(object.Key)
 		size := aws.ToInt64(object.Size)
 		lastModified := aws.ToTime(object.LastModified)
-		file := s3file.New(key, lastModified, size, r.s3wrapper)
+		file, err := s3file.New(ctx, key, lastModified, size, r.s3wrapper)
+		if err != nil {
+			r.logger.Error("failed creating new file", "err", err)
+			log.Fatal(err)
+		}
 
 		// Create the file. The Inode must be persistent,
 		// because its life time is not under control of the

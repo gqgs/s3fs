@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gqgs/s3fs/pkg/s3wrapper"
+	"github.com/gqgs/s3fs/pkg/storage"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
@@ -29,21 +30,37 @@ type file struct {
 	size         uint64
 	lastModified uint64
 	logger       *slog.Logger
+	db           storage.Storage
 }
 
-func New(key string, lastModified time.Time, size int64, s3wrapper s3wrapper.Wrapper) *file {
+func New(ctx context.Context, key string, lastModified time.Time, size int64, s3wrapper s3wrapper.Wrapper) (*file, error) {
+	logger := slog.Default().WithGroup("s3file")
+	logger.Debug("creating new file", "key", key, "size", size)
+
+	db := storage.Default()
+	_, err := db.InsertPath(ctx, key, lastModified)
+	if err != nil {
+		logger.Error("error creating new file", "key", key, "err", err)
+		return nil, err
+	}
+
+	logger.Debug("created new file", "key", key, "size", size)
+
 	return &file{
 		key:          key,
 		lastModified: uint64(lastModified.Unix()),
 		size:         uint64(size),
 		s3wrapper:    s3wrapper,
-		logger:       slog.Default().WithGroup("s3file"),
-	}
+		logger:       logger,
+		db:           db,
+	}, nil
 }
 
 func (f *file) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
 	f.logger.Debug("file open call", "key", f.key)
-
+	if err := f.db.UpdateAccess(ctx, f.key); err != nil {
+		f.logger.Error("failed updating accessed at", "key", f.key, "err", err)
+	}
 	return nil, fuse.FOPEN_KEEP_CACHE, fs.OK
 }
 
