@@ -20,6 +20,7 @@ type fileInterface interface {
 	fs.NodeGetattrer
 	fs.NodeReader
 	fs.NodeWriter
+	fs.NodeSetattrer
 }
 
 type file struct {
@@ -86,6 +87,7 @@ func (f *file) Read(ctx context.Context, fh fs.FileHandle, dest []byte, off int6
 func (f *file) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 	f.logger.Debug("file getattr call", "key", f.key)
 
+	// TODO: set more strict permissions here
 	out.Mode = 07777
 	out.Nlink = 1
 	out.Mtime = f.lastModified
@@ -116,5 +118,17 @@ func (f *file) Flush(ctx context.Context, fh fs.FileHandle) syscall.Errno {
 
 	f.size = uint64(len(f.data))
 	f.data = nil
+	return fs.OK
+}
+
+func (f *file) Setattr(ctx context.Context, fh fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
+	f.logger.Debug("file setattr call", "key", f.key)
+
+	out.Mode = in.Mode
+	out.Mtime = in.Mtime
+	out.Atime = in.Atime
+	out.Ctime = in.Ctime
+	out.Size = in.Size
+
 	return fs.OK
 }
