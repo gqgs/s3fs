@@ -27,6 +27,7 @@ type directory interface {
 	fs.NodeCreater
 	fs.NodeMkdirer
 	fs.NodeGetattrer
+	fs.NodeUnlinker
 }
 
 type root struct {

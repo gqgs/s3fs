@@ -31,7 +31,7 @@ func main() {
 	}
 	o.MustParse()
 
-	if o.debug || o.verbose {
+	if o.debug {
 		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
 

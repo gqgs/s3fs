@@ -20,6 +20,7 @@ type directoryInterface interface {
 	fs.NodeGetattrer
 	fs.NodeCreater
 	fs.NodeMkdirer
+	fs.NodeUnlinker
 }
 
 type directory struct {
@@ -91,4 +92,25 @@ func (d *directory) Mkdir(ctx context.Context, name string, mode uint32, out *fu
 	child := d.NewPersistentInode(ctx, newDirectory, fs.StableAttr{Mode: syscall.S_IFDIR})
 	d.AddChild(name, child, true)
 	return child, fs.OK
+}
+
+func (d *directory) Unlink(ctx context.Context, name string) syscall.Errno {
+	d.logger.Debug("directory unlink call", "name", name)
+
+	child := d.Inode.GetChild(name)
+	if child == nil {
+		d.logger.Warn("child not found", "name", name)
+		return fs.OK
+	}
+
+	// TODO: handle unlink of directories
+	key := filepath.Join(d.path, name)
+	if err := d.s3wrapper.DeleteObject(ctx, key); err != nil {
+		d.logger.Error("error unlinking file", "key", key, "name", name)
+		return fs.ToErrno(err)
+	}
+
+	child.ForgetPersistent()
+
+	return fs.OK
 }

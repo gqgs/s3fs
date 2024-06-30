@@ -18,6 +18,7 @@ type Wrapper interface {
 	ListObjects(ctx context.Context) ([]types.Object, error)
 	DownloadRange(ctx context.Context, key string, dest []byte, off, size int) (n int64, err error)
 	UploadFile(ctx context.Context, key string, reader io.Reader) error
+	DeleteObject(ctx context.Context, key string) error
 }
 
 type s3wrapper struct {
@@ -80,4 +81,12 @@ func (w *s3wrapper) ListObjects(ctx context.Context) ([]types.Object, error) {
 	}
 
 	return objects, nil
+}
+
+func (w *s3wrapper) DeleteObject(ctx context.Context, key string) error {
+	_, err := w.s3client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: &w.bucket,
+		Key:    &key,
+	})
+	return err
 }
