@@ -84,6 +84,8 @@ func (w *s3wrapper) ListObjects(ctx context.Context) ([]types.Object, error) {
 }
 
 func (w *s3wrapper) DeleteObject(ctx context.Context, key string) error {
+	w.logger.Debug("delete object call", "key", key)
+
 	_, err := w.s3client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: &w.bucket,
 		Key:    &key,
