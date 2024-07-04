@@ -58,6 +58,7 @@ func (d *directory) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.Att
 	out.Mtime = d.updateTime
 	out.Atime = d.updateTime
 	out.Ctime = d.updateTime
+	out.SetTimeout(time.Minute)
 	return fs.OK
 }
 

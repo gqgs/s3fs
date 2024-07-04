@@ -94,6 +94,7 @@ func (f *file) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut)
 	out.Atime = f.lastModified
 	out.Ctime = f.lastModified
 	out.Size = f.size
+	out.SetTimeout(time.Minute)
 	return fs.OK
 }
 
@@ -129,6 +130,7 @@ func (f *file) Setattr(ctx context.Context, fh fs.FileHandle, in *fuse.SetAttrIn
 	out.Atime = in.Atime
 	out.Ctime = in.Ctime
 	out.Size = in.Size
+	out.SetTimeout(time.Minute)
 
 	return fs.OK
 }
