@@ -22,7 +22,7 @@ func NewSqlite(dbPath string) (*sqliteStorage, error) {
 	}
 	if _, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS files (
-			path string TEXT PRIMARY KEY,
+			path TEXT PRIMARY KEY,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -55,5 +55,5 @@ func (s *sqliteStorage) UpdateAccess(ctx context.Context, path string) error {
 }
 
 func (s *sqliteStorage) Close() error {
-	return s.Close()
+	return s.db.Close()
 }
