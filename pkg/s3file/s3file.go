@@ -29,17 +29,17 @@ type file struct {
 	key          string
 	data         []byte
 	size         uint64
-	lastModified uint64
+	modifiedTime uint64
 	logger       *slog.Logger
 	db           storage.Storage
 }
 
-func New(ctx context.Context, key string, lastModified time.Time, size int64, s3wrapper s3wrapper.Wrapper) (*file, error) {
+func New(ctx context.Context, key string, modifiedTime time.Time, size int64, s3wrapper s3wrapper.Wrapper) (*file, error) {
 	logger := slog.Default().WithGroup("s3file")
 	logger.Debug("creating new file", "key", key, "size", size)
 
 	db := storage.Default()
-	_, err := db.InsertPath(ctx, key, lastModified)
+	_, err := db.InsertPath(ctx, key, modifiedTime)
 	if err != nil {
 		logger.Error("error creating new file", "key", key, "err", err)
 		return nil, err
@@ -49,7 +49,7 @@ func New(ctx context.Context, key string, lastModified time.Time, size int64, s3
 
 	return &file{
 		key:          key,
-		lastModified: uint64(lastModified.Unix()),
+		modifiedTime: uint64(modifiedTime.Unix()),
 		size:         uint64(size),
 		s3wrapper:    s3wrapper,
 		logger:       logger,
@@ -90,9 +90,9 @@ func (f *file) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut)
 	// TODO: set more strict permissions here
 	out.Mode = 07777
 	out.Nlink = 1
-	out.Mtime = f.lastModified
-	out.Atime = f.lastModified
-	out.Ctime = f.lastModified
+	out.Mtime = f.modifiedTime
+	out.Atime = f.modifiedTime
+	out.Ctime = f.modifiedTime
 	out.Size = f.size
 	out.SetTimeout(time.Minute)
 	return fs.OK
@@ -117,6 +117,10 @@ func (f *file) Flush(ctx context.Context, fh fs.FileHandle) syscall.Errno {
 		return fs.ToErrno(err)
 	}
 
+	if err := f.updateModified(ctx); err != nil {
+		f.logger.Error("failed to update modified at", "err", err)
+	}
+
 	f.size = uint64(len(f.data))
 	f.data = nil
 	return fs.OK
@@ -133,4 +137,25 @@ func (f *file) Setattr(ctx context.Context, fh fs.FileHandle, in *fuse.SetAttrIn
 	out.SetTimeout(time.Minute)
 
 	return fs.OK
+}
+
+func (f *file) updateModified(ctx context.Context) error {
+	f.logger.Debug("file updating mofidied at", "key", f.key)
+
+	if err := f.db.UpdateModified(ctx, f.key); err != nil {
+		return err
+	}
+
+	f.modifiedTime = uint64(time.Now().Unix())
+
+	_, parent := f.Inode.Parent()
+	if parent == nil {
+		return nil
+	}
+
+	if p, ok := parent.Operations().(storage.ModifiedUpdater); ok {
+		return p.UpdateModified(ctx)
+	}
+
+	return nil
 }

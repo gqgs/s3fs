@@ -21,21 +21,24 @@ type directoryInterface interface {
 	fs.NodeCreater
 	fs.NodeMkdirer
 	fs.NodeUnlinker
+	storage.ModifiedUpdater
 }
 
 type directory struct {
 	fs.Inode
-	s3wrapper  s3wrapper.Wrapper
-	updateTime uint64
-	path       string
-	logger     *slog.Logger
+	s3wrapper    s3wrapper.Wrapper
+	modifiedTime uint64
+	path         string
+	logger       *slog.Logger
+	db           storage.Storage
 }
 
 func New(ctx context.Context, path string, s3wrapper s3wrapper.Wrapper) (*directory, error) {
 	logger := slog.Default().WithGroup("s3directory")
 	logger.Debug("creating new directory", "path", path)
 
-	lastUpdated, err := storage.Default().InsertPath(ctx, path, time.Now())
+	db := storage.Default()
+	lastUpdated, err := db.InsertPath(ctx, path, time.Now())
 	if err != nil {
 		logger.Error("error creating new directory", "path", path, "err", err)
 		return nil, err
@@ -43,10 +46,11 @@ func New(ctx context.Context, path string, s3wrapper s3wrapper.Wrapper) (*direct
 
 	logger.Debug("created directory inode", "path", path, "lastUpdated", lastUpdated)
 	return &directory{
-		updateTime: uint64(lastUpdated.Unix()),
-		path:       path,
-		s3wrapper:  s3wrapper,
-		logger:     logger,
+		modifiedTime: uint64(lastUpdated.Unix()),
+		path:         path,
+		s3wrapper:    s3wrapper,
+		logger:       logger,
+		db:           db,
 	}, nil
 }
 
@@ -55,9 +59,9 @@ func (d *directory) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.Att
 
 	out.Mode = 07777
 	out.Nlink = 1
-	out.Mtime = d.updateTime
-	out.Atime = d.updateTime
-	out.Ctime = d.updateTime
+	out.Mtime = d.modifiedTime
+	out.Atime = d.modifiedTime
+	out.Ctime = d.modifiedTime
 	out.SetTimeout(time.Minute)
 	return fs.OK
 }
@@ -114,4 +118,25 @@ func (d *directory) Unlink(ctx context.Context, name string) syscall.Errno {
 	child.ForgetPersistent()
 
 	return fs.OK
+}
+
+func (d *directory) UpdateModified(ctx context.Context) error {
+	d.logger.Debug("directory updating mofidied at", "path", d.path)
+
+	if err := d.db.UpdateModified(ctx, d.path); err != nil {
+		return err
+	}
+
+	d.modifiedTime = uint64(time.Now().Unix())
+
+	_, parent := d.Inode.Parent()
+	if parent == nil {
+		return nil
+	}
+
+	if p, ok := parent.Operations().(storage.ModifiedUpdater); ok {
+		return p.UpdateModified(ctx)
+	}
+
+	return nil
 }

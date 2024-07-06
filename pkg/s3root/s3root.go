@@ -12,6 +12,7 @@ import (
 	"github.com/gqgs/s3fs/pkg/s3directory"
 	"github.com/gqgs/s3fs/pkg/s3file"
 	"github.com/gqgs/s3fs/pkg/s3wrapper"
+	"github.com/gqgs/s3fs/pkg/storage"
 	"github.com/hanwen/go-fuse/v2/fs"
 )
 
@@ -28,6 +29,7 @@ type directory interface {
 	fs.NodeMkdirer
 	fs.NodeGetattrer
 	fs.NodeUnlinker
+	storage.ModifiedUpdater
 }
 
 type root struct {
@@ -84,7 +86,7 @@ func (r *root) OnAdd(ctx context.Context) {
 			if child == nil {
 				directory, err := s3directory.New(ctx, path, r.s3wrapper)
 				if err != nil {
-					r.logger.Error("failed inserting data into database", "err", err)
+					r.logger.Error("failed creating new directory", "err", err)
 					log.Fatal(err)
 				}
 

@@ -54,6 +54,11 @@ func (s *sqliteStorage) UpdateAccess(ctx context.Context, path string) error {
 	return err
 }
 
+func (s *sqliteStorage) UpdateModified(ctx context.Context, path string) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE files SET updated_at = DATETIME() WHERE path = ?", path)
+	return err
+}
+
 func (s *sqliteStorage) Close() error {
 	return s.db.Close()
 }
