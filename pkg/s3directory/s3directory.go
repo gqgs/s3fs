@@ -14,9 +14,10 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
-var _ = (directoryInterface)((*directory)(nil))
+var _ = (DirectoryInterface)((*directory)(nil))
 
-type directoryInterface interface {
+type DirectoryInterface interface {
+	fs.InodeEmbedder
 	fs.NodeGetattrer
 	fs.NodeCreater
 	fs.NodeMkdirer

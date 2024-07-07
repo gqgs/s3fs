@@ -12,28 +12,18 @@ import (
 	"github.com/gqgs/s3fs/pkg/s3directory"
 	"github.com/gqgs/s3fs/pkg/s3file"
 	"github.com/gqgs/s3fs/pkg/s3wrapper"
-	"github.com/gqgs/s3fs/pkg/storage"
 	"github.com/hanwen/go-fuse/v2/fs"
 )
 
 var _ = (rootInterface)((*root)(nil))
 
 type rootInterface interface {
-	directory
+	s3directory.DirectoryInterface
 	fs.NodeOnAdder
 }
 
-type directory interface {
-	fs.InodeEmbedder
-	fs.NodeCreater
-	fs.NodeMkdirer
-	fs.NodeGetattrer
-	fs.NodeUnlinker
-	storage.ModifiedUpdater
-}
-
 type root struct {
-	directory
+	s3directory.DirectoryInterface
 	s3wrapper s3wrapper.Wrapper
 	logger    *slog.Logger
 }
@@ -50,9 +40,9 @@ func New(ctx context.Context, s3wrapper s3wrapper.Wrapper) (*root, error) {
 
 	logger.Debug("created new root")
 	return &root{
-		directory: directory,
-		s3wrapper: s3wrapper,
-		logger:    logger,
+		DirectoryInterface: directory,
+		s3wrapper:          s3wrapper,
+		logger:             logger,
 	}, nil
 }
 
