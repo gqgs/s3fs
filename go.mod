@@ -1,13 +1,13 @@
 module github.com/gqgs/s3fs
 
-go 1.23rc1
+go 1.24.0
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.30.0
 	github.com/aws/aws-sdk-go-v2/config v1.27.22
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.57.0
-	github.com/hanwen/go-fuse/v2 v2.5.1
+	github.com/hanwen/go-fuse/v2 v2.7.2
 	github.com/mattn/go-sqlite3 v1.14.22
 )
 
