@@ -27,6 +27,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.26.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.30.0 // indirect
 	github.com/aws/smithy-go v1.20.2 // indirect
+	github.com/gqgs/argsgen/v2 v2.0.4 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
 )
+
+tool github.com/gqgs/argsgen/v2

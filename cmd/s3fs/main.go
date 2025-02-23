@@ -10,7 +10,7 @@ import (
 	"syscall"
 )
 
-//go:generate go run github.com/gqgs/argsgen@latest
+//go:generate go tool argsgen
 
 type options struct {
 	db          string `arg:"database name (sqlite),required"`
